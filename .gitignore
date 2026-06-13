@@ -1,0 +1,46 @@
+# Build
+build/
+build_x86/
+build_stub/
+cmake-build-*/
+out/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# Java
+*.class
+*.jar
+!java-api/target/*.jar
+target/
+!.mvn/wrapper/maven-wrapper.jar
+
+# OS
+.DS_Store
+Thumbs.db
+
+# C++
+*.o
+*.obj
+*.a
+*.dylib
+*.so
+*.dll
+*.exe
+*.d
+*.make
+compiler_depend*
+
+# CMake
+CMakeCache.txt
+CMakeFiles/
+cmake_install.cmake
+CTestTestfile.cmake
+Makefile
+
+# Dependencies
+node_modules/
