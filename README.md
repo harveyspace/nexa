@@ -321,16 +321,6 @@ and HarmonyOS, V8 runs in-process via NDK/NAPI — process isolation is not
 available due to platform constraints, but the tighter memory limits and
 controlled JS environment keep risk low.
 
-## Roadmap
-
-| Phase | Scope | Duration |
-|---|---|---|
-| **1. Core + Modules** | Isolate pool, JNI binding, `@NexaExport` | 4 weeks |
-| **2. Snapshots** | V8 snapshot serialize/deserialize, shared RO heap | 2 weeks |
-| **3. Zero-copy** | DirectBuffer pool, JNI zero-copy, JS Buffer API | 2 weeks |
-| **4. Production** | Prometheus metrics, OOM isolation, graceful shutdown | 2 weeks |
-| **5. Mobile** | Android NDK cross-compile, HarmonyOS NAPI | Future |
-
 ## Contributing
 
 See [CONTRIBUTING.md](CONTRIBUTING.md).
