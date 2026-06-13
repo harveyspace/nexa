@@ -44,6 +44,24 @@ public class NexaIsolate implements AutoCloseable {
         return nativeCall(nativePtr, function, jsonArgs);
     }
 
+    /** Read a global variable as JSON string. */
+    public String getGlobalJson(String name) {
+        checkAlive();
+        return nativeGetGlobalJson(nativePtr, name);
+    }
+
+    /** Set a global variable from JSON string. */
+    public void setGlobalJson(String name, String json) {
+        checkAlive();
+        nativeSetGlobalJson(nativePtr, name, json);
+    }
+
+    /** Bind a Java callback as a V8 JS function. Call NexaCallback.register() first. */
+    public void bindCallback(String name) {
+        checkAlive();
+        nativeBindCallback(nativePtr, name);
+    }
+
     /** Destroy standalone isolate. Pool isolates are released via pool. */
     @Override
     public void close() {
@@ -62,5 +80,8 @@ public class NexaIsolate implements AutoCloseable {
     private static native String nativeRun(long isoPtr, String script);
     private static native String nativeLoad(long isoPtr, String name, String script);
     private static native String nativeCall(long isoPtr, String func, String jsonArgs);
+    private static native String nativeGetGlobalJson(long isoPtr, String name);
+    private static native void   nativeSetGlobalJson(long isoPtr, String name, String json);
+    private static native void   nativeBindCallback(long isoPtr, String name);
     private static native void   nativeDestroy(long isoPtr);
 }

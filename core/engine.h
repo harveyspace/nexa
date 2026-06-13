@@ -19,6 +19,8 @@
   #define engine_gc stub_isolate_gc
   #define engine_heap_used stub_isolate_heap_used
   #define engine_heap_total stub_isolate_heap_total
+  #define engine_get_global_json stub_isolate_get_global_json
+  #define engine_bind_callback stub_isolate_bind_callback
 #else
   #include "v8_engine.h"
   #define EngineIsolate V8Isolate
@@ -34,6 +36,8 @@
   #define engine_gc v8_isolate_gc
   #define engine_heap_used v8_isolate_heap_used
   #define engine_heap_total v8_isolate_heap_total
+  #define engine_get_global_json v8_get_global_json
+  #define engine_bind_callback v8_bind_callback
 #endif
 
 #endif /* NEXA_ENGINE_H */

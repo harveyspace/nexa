@@ -79,6 +79,13 @@ void nexa_isolate_bind_modules(NexaIsolate* iso,
 
 void nexa_isolate_set_global(NexaIsolate* iso, const char* name,
                              const char* json);
+char* nexa_isolate_get_global_json(NexaIsolate* iso, const char* name);
+
+/* ── Callback binding ─────────────────────────────── */
+
+typedef char* (*nexa_callback_fn)(void* user_data, const char* json_args);
+void nexa_isolate_bind_callback(NexaIsolate* iso, const char* name,
+                                 nexa_callback_fn fn, void* user_data);
 
 /* ── DirectBuffer (zero-copy) ──────────────────────── */
 

@@ -38,6 +38,15 @@ size_t v8_isolate_heap_total(V8Isolate* iso);
 int    v8_create_snapshot(const char* warmup_script, const char* output_path,
                           size_t heap_mb);
 
+/* Global variable access (JSON bridge) */
+char*  v8_get_global_json(V8Isolate* eng, const char* name);
+void   v8_set_global_json(V8Isolate* eng, const char* name, const char* json);
+
+/* Callback registry — binds C function as V8 JS function */
+typedef char* (*nexa_callback_fn)(void* user_data, const char* json_args);
+void   v8_bind_callback(V8Isolate* eng, const char* name,
+                         nexa_callback_fn fn, void* user_data);
+
 char*  v8_isolate_run(V8Isolate* iso, const char* script);
 char*  v8_isolate_call(V8Isolate* iso, const char* func, const char* json);
 char*  v8_isolate_load(V8Isolate* iso, const char* name, const char* script);

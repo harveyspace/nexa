@@ -94,3 +94,12 @@ size_t stub_isolate_heap_used(StubIsolate* iso) {
 size_t stub_isolate_heap_total(StubIsolate* iso) {
     return iso->heap_mb * 1024 * 1024;
 }
+
+char* stub_isolate_get_global_json(StubIsolate* iso, const char* name) {
+    return strdup("null");
+}
+
+void stub_isolate_bind_callback(StubIsolate* iso, const char* name,
+                                 nexa_callback_fn fn, void* user_data) {
+    (void)iso; (void)name; (void)fn; (void)user_data;
+}

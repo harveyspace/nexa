@@ -39,6 +39,11 @@ void   stub_isolate_gc(StubIsolate* iso);
 size_t stub_isolate_heap_used(StubIsolate* iso);
 size_t stub_isolate_heap_total(StubIsolate* iso);
 
+char*  stub_isolate_get_global_json(StubIsolate* iso, const char* name);
+typedef char* (*nexa_callback_fn)(void* user_data, const char* json_args);
+void   stub_isolate_bind_callback(StubIsolate* iso, const char* name,
+                                   nexa_callback_fn fn, void* user_data);
+
 #ifdef __cplusplus
 }
 #endif

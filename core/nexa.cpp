@@ -110,6 +110,17 @@ void nexa_isolate_set_global(NexaIsolate* iso, const char* name,
     engine_set_global(iso->engine, name, json);
 }
 
+char* nexa_isolate_get_global_json(NexaIsolate* iso, const char* name) {
+    return engine_get_global_json(iso->engine, name);
+}
+
+/* ── Callback binding ─────────────────────────────── */
+
+void nexa_isolate_bind_callback(NexaIsolate* iso, const char* name,
+                                 nexa_callback_fn fn, void* user_data) {
+    engine_bind_callback(iso->engine, name, fn, user_data);
+}
+
 /* ── DirectBuffer ─────────────────────────────────── */
 
 void* nexa_isolate_get_direct_buffer(NexaIsolate* iso, size_t* len) {

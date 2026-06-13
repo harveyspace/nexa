@@ -24,7 +24,10 @@ static NexaIsolate* create_isolate(const NexaPoolConfig* cfg, uint32_t id) {
 static void destroy_isolate(NexaIsolate* iso, NexaPool* pool) {
     PoolState* s = (PoolState*)pool;
     s->discard_count++;
-    engine_destroy(iso->engine);
+    if (iso->engine) {
+        engine_destroy(iso->engine);
+        iso->engine = nullptr;
+    }
     free(iso);
 }
 
@@ -62,8 +65,12 @@ void pool_destroy(NexaPool* pool) {
     PoolState* s = (PoolState*)pool;
     for (uint32_t i = 0; i < s->capacity; i++) {
         if (s->isolates[i]) {
-            engine_destroy(s->isolates[i]->engine);
+            if (s->isolates[i]->engine) {
+                engine_destroy(s->isolates[i]->engine);
+                s->isolates[i]->engine = nullptr;
+            }
             free(s->isolates[i]);
+            s->isolates[i] = nullptr;
         }
     }
     free(s->isolates);

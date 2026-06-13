@@ -14,8 +14,6 @@
 static v8::Platform* g_platform = nullptr;
 
 static void init_v8() {
-    v8::V8::InitializeICUDefaultLocation(nullptr);
-    v8::V8::InitializeExternalStartupData(nullptr);
     g_platform = v8::platform::NewDefaultPlatform().release();
     v8::V8::InitializePlatform(g_platform);
     v8::V8::Initialize();

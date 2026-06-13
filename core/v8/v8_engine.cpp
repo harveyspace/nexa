@@ -19,8 +19,6 @@ static bool          g_initialized = false;
 
 static void ensure_v8_init() {
     if (g_initialized) return;
-    v8::V8::InitializeICUDefaultLocation(nullptr);
-    v8::V8::InitializeExternalStartupData(nullptr);
     g_platform = v8::platform::NewDefaultPlatform().release();
     v8::V8::InitializePlatform(g_platform);
     v8::V8::Initialize();
@@ -87,11 +85,7 @@ V8Isolate* v8_isolate_create(size_t heap_mb, size_t stack_kb) {
 /* ── Destroy ──────────────────────────────────────── */
 
 void v8_isolate_destroy(V8Isolate* eng) {
-    if (!eng) return;
-    eng->context.Reset();
-    eng->isolate->Dispose();
-    delete eng->params.array_buffer_allocator;
-    free(eng);
+    if (eng) free(eng);
 }
 
 /* ── Script execution ────────────────────────────── */
@@ -240,16 +234,22 @@ void v8_isolate_set_direct_buffer(V8Isolate* eng, void* buf, size_t len) {
 /* ── GC ──────────────────────────────────────────── */
 
 void v8_isolate_gc(V8Isolate* eng) {
+    v8::Isolate::Scope iso_scope(eng->isolate);
+    v8::HandleScope    handle_scope(eng->isolate);
     eng->isolate->LowMemoryNotification();
 }
 
 size_t v8_isolate_heap_used(V8Isolate* eng) {
+    v8::Isolate::Scope iso_scope(eng->isolate);
+    v8::HandleScope    handle_scope(eng->isolate);
     v8::HeapStatistics stats;
     eng->isolate->GetHeapStatistics(&stats);
     return stats.used_heap_size();
 }
 
 size_t v8_isolate_heap_total(V8Isolate* eng) {
+    v8::Isolate::Scope iso_scope(eng->isolate);
+    v8::HandleScope    handle_scope(eng->isolate);
     v8::HeapStatistics stats;
     eng->isolate->GetHeapStatistics(&stats);
     return stats.total_heap_size();
@@ -291,4 +291,142 @@ int v8_create_snapshot(const char* warmup_script, const char* output_path,
     fclose(f);
     delete[] blob.data;
     return 0;
+}
+
+/* ── Global variable access (JSON bridge) ─────────── */
+
+char* v8_get_global_json(V8Isolate* eng, const char* name) {
+    v8::Isolate* iso = eng->isolate;
+    v8::Isolate::Scope iso_scope(iso);
+    v8::HandleScope    handle_scope(iso);
+    v8::Local<v8::Context> ctx = eng->context.Get(iso);
+    v8::Context::Scope ctx_scope(ctx);
+
+    v8::Local<v8::String> key = v8::String::NewFromUtf8(iso, name).ToLocalChecked();
+    v8::MaybeLocal<v8::Value> maybe_val = ctx->Global()->Get(ctx, key);
+    if (maybe_val.IsEmpty()) return strdup("null");
+
+    v8::Local<v8::Value> val = maybe_val.ToLocalChecked();
+    if (val->IsUndefined() || val->IsNull()) return strdup("null");
+
+    /* Use JSON.stringify to serialize */
+    v8::Local<v8::Object> json_obj = ctx->Global()->Get(ctx,
+        v8::String::NewFromUtf8(iso, "JSON").ToLocalChecked())
+        .ToLocalChecked().As<v8::Object>();
+    v8::Local<v8::Function> stringify = json_obj->Get(ctx,
+        v8::String::NewFromUtf8(iso, "stringify").ToLocalChecked())
+        .ToLocalChecked().As<v8::Function>();
+
+    v8::Local<v8::Value> argv[] = { val };
+    v8::MaybeLocal<v8::Value> result = stringify->Call(ctx, json_obj, 1, argv);
+    if (result.IsEmpty()) return strdup("null");
+
+    v8::String::Utf8Value utf8(iso, result.ToLocalChecked());
+    return strdup(*utf8 ? *utf8 : "null");
+}
+
+void v8_set_global_json(V8Isolate* eng, const char* name, const char* json) {
+    v8::Isolate* iso = eng->isolate;
+    v8::Isolate::Scope iso_scope(iso);
+    v8::HandleScope    handle_scope(iso);
+    v8::Local<v8::Context> ctx = eng->context.Get(iso);
+    v8::Context::Scope ctx_scope(ctx);
+
+    /* Use JSON.parse to deserialize */
+    v8::Local<v8::Object> json_obj = ctx->Global()->Get(ctx,
+        v8::String::NewFromUtf8(iso, "JSON").ToLocalChecked())
+        .ToLocalChecked().As<v8::Object>();
+    v8::Local<v8::Function> parse = json_obj->Get(ctx,
+        v8::String::NewFromUtf8(iso, "parse").ToLocalChecked())
+        .ToLocalChecked().As<v8::Function>();
+
+    v8::Local<v8::Value> argv[] = {
+        v8::String::NewFromUtf8(iso, json).ToLocalChecked()
+    };
+    v8::MaybeLocal<v8::Value> val = parse->Call(ctx, json_obj, 1, argv);
+
+    v8::Local<v8::String> key = v8::String::NewFromUtf8(iso, name).ToLocalChecked();
+    if (!val.IsEmpty()) {
+        ctx->Global()->Set(ctx, key, val.ToLocalChecked());
+    }
+}
+
+/* ── Callback registry ────────────────────────────── */
+
+#include <map>
+#include <string>
+
+struct CallbackEntry {
+    nexa_callback_fn fn;
+    void*            user_data;
+};
+
+static std::map<std::string, CallbackEntry> g_callbacks;
+
+void v8_bind_callback(V8Isolate* eng, const char* name,
+                       nexa_callback_fn fn, void* user_data) {
+    g_callbacks[name] = {fn, user_data};
+
+    v8::Isolate* iso = eng->isolate;
+    v8::Isolate::Scope iso_scope(iso);
+    v8::HandleScope    handle_scope(iso);
+    v8::Local<v8::Context> ctx = eng->context.Get(iso);
+    v8::Context::Scope ctx_scope(ctx);
+
+    /* Create a V8 function that wraps the C callback.
+     * Store callback name in `data` — V8 passes it as args.Data(). */
+    v8::Local<v8::String> cb_name = v8::String::NewFromUtf8(iso, name).ToLocalChecked();
+    std::string key(name);
+    v8::Local<v8::FunctionTemplate> tpl = v8::FunctionTemplate::New(iso,
+        [](const v8::FunctionCallbackInfo<v8::Value>& args) {
+            v8::Isolate* iso = args.GetIsolate();
+            v8::Local<v8::Context> ctx = iso->GetCurrentContext();
+            v8::String::Utf8Value name_utf8(iso, args.Data());
+            std::string key(*name_utf8);
+
+            auto it = g_callbacks.find(key);
+            if (it == g_callbacks.end()) {
+                args.GetReturnValue().Set(v8::Undefined(iso));
+                return;
+            }
+
+            /* Serialize all JS arguments to JSON array */
+            v8::Local<v8::Array> js_args = v8::Array::New(iso, args.Length());
+            for (int i = 0; i < args.Length(); i++) {
+                js_args->Set(ctx, i, args[i]);
+            }
+
+            v8::Local<v8::Object> json_obj = ctx->Global()->Get(ctx,
+                v8::String::NewFromUtf8(iso, "JSON").ToLocalChecked())
+                .ToLocalChecked().As<v8::Object>();
+            v8::Local<v8::Function> stringify = json_obj->Get(ctx,
+                v8::String::NewFromUtf8(iso, "stringify").ToLocalChecked())
+                .ToLocalChecked().As<v8::Function>();
+
+            v8::Local<v8::Value> sargv[] = { js_args };
+            v8::MaybeLocal<v8::Value> json_result = stringify->Call(ctx, json_obj, 1, sargv);
+
+            v8::String::Utf8Value json_utf8(iso,
+                json_result.IsEmpty() ? v8::String::Empty(iso) : json_result.ToLocalChecked());
+
+            /* Call C callback */
+            char* response = it->second.fn(it->second.user_data, *json_utf8);
+
+            /* Parse response back to V8 value */
+            v8::Local<v8::Function> parse = json_obj->Get(ctx,
+                v8::String::NewFromUtf8(iso, "parse").ToLocalChecked())
+                .ToLocalChecked().As<v8::Function>();
+            v8::Local<v8::Value> parv[] = {
+                v8::String::NewFromUtf8(iso, response ? response : "null").ToLocalChecked()
+            };
+            v8::MaybeLocal<v8::Value> ret = parse->Call(ctx, json_obj, 1, parv);
+            if (response) free(response);
+
+            args.GetReturnValue().Set(
+                ret.IsEmpty() ? v8::Undefined(iso) : ret.ToLocalChecked());
+        }, cb_name);
+
+    v8::Local<v8::Function> fn_obj = tpl->GetFunction(ctx).ToLocalChecked();
+    fn_obj->SetName(cb_name);
+    ctx->Global()->Set(ctx, cb_name, fn_obj);
 }
